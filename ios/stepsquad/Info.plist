@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>step-squad</string>
-          <string>com.anonymous.myapp</string>
+          <string>com.anonymous.stepsquad</string>
         </array>
       </dict>
     </array>
