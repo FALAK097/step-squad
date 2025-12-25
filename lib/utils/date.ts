@@ -9,16 +9,19 @@ export type DateRange = {
  */
 export function getTodayRange(): DateRange {
   const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
 
-  // Force a 10-millisecond buffer to ensure start is always strictly before end
-  // even if the clock hasn't ticked much since the start of the day.
-  const startTime = start.getTime();
-  let endTime = now.getTime();
+  // Create start of day in local time (midnight)
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 
+  // Health Connect SDK can be sensitive to fractional seconds on some devices.
+  // We truncate to whole seconds to be safe.
+  const startTime = Math.floor(startOfDay.getTime() / 1000) * 1000;
+  let endTime = Math.floor(now.getTime() / 1000) * 1000;
+
+  // Health Connect SDK strictly requires startTime < endTime.
+  // We ensure end is at least 1 second after start.
   if (endTime <= startTime) {
-    endTime = startTime + 10000; // +10 seconds safety buffer
+    endTime = startTime + 1000;
   }
 
   return {

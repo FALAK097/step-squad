@@ -3,7 +3,7 @@ import {
   getSdkStatus,
   initialize,
   openHealthConnectSettings,
-  readRecords,
+  aggregateRecord,
   requestPermission,
   SdkAvailabilityStatus,
   type Permission,
@@ -49,21 +49,23 @@ export async function ensureInitialized(): Promise<boolean> {
 export async function hasStepPermission(): Promise<boolean> {
   const granted = await getGrantedPermissions();
   return granted.some(
-    (permission) => permission.recordType === STEP_PERMISSION.recordType && permission.accessType === 'read'
+    (permission) =>
+      permission.recordType === STEP_PERMISSION.recordType && permission.accessType === 'read'
   );
 }
 
 export async function requestStepPermission(): Promise<PermissionState> {
   const granted = await requestPermission([STEP_PERMISSION]);
   const hasPermission = granted.some(
-    (permission) => permission.recordType === STEP_PERMISSION.recordType && permission.accessType === 'read'
+    (permission) =>
+      permission.recordType === STEP_PERMISSION.recordType && permission.accessType === 'read'
   );
 
   return hasPermission ? 'granted' : 'denied';
 }
 
 export async function openHealthConnectAppSettings() {
-  await openHealthConnectSettings();
+  openHealthConnectSettings();
 }
 
 export type StepReadResult = {
@@ -73,16 +75,25 @@ export type StepReadResult = {
 
 export async function readStepsForRange(range?: DateRange): Promise<StepReadResult> {
   const { start, end } = range ?? getTodayRange();
-  const { records } = await readRecords('Steps', {
-    timeRangeFilter: {
-      operator: 'between',
-      startTime: start,
-      endTime: end,
-    },
-  });
 
-  const totalSteps = records.reduce((sum, record) => sum + record.count, 0);
-  return { totalSteps, records };
+  try {
+    const result = await aggregateRecord({
+      recordType: 'Steps',
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: start,
+        endTime: end,
+      },
+    });
+
+    return {
+      totalSteps: (result as any)?.COUNT_TOTAL || 0,
+      records: [],
+    };
+  } catch (error) {
+    console.error('[HealthConnect] SDK Error:', error);
+    throw error;
+  }
 }
 
 export async function readTodaySteps() {

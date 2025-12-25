@@ -61,11 +61,12 @@ export default function HomeScreen() {
         }
       }
 
-      const { totalSteps } = await readTodaySteps();
-      setSteps(totalSteps);
+      const stepData = await readTodaySteps();
+      setSteps(stepData.totalSteps);
       setLastUpdated(new Date());
       setUiState('ready');
     } catch (error) {
+      console.error('[HomeScreen] Error:', error);
       setUiState('error');
       setMessage(error instanceof Error ? error.message : 'Unexpected error');
     } finally {
@@ -98,10 +99,7 @@ export default function HomeScreen() {
     <ScrollView
       className="flex-1 bg-background"
       contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
       {uiState === 'checking' && (
         <View className="mt-20">
           <LoadingState label="Loading..." />
@@ -147,9 +145,7 @@ export default function HomeScreen() {
 
       {uiState === 'ready' && (
         <View className="gap-5">
-          <Text className="text-2xl font-bold text-foreground">
-            {formatDate(new Date())}
-          </Text>
+          <Text className="text-2xl font-bold text-foreground">{formatDate(new Date())}</Text>
 
           <StepCard
             steps={steps}
