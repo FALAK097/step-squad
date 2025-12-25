@@ -33,7 +33,7 @@ export default function TabLayout() {
   }
 
   return (
-    <ThemeProvider value={theme}>
+    <>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Tabs
         screenOptions={{
@@ -91,6 +91,6 @@ export default function TabLayout() {
         />
       </Tabs>
       <PortalHost />
-    </ThemeProvider>
+    </>
   );
 }

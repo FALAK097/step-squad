@@ -40,7 +40,7 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const { profile, refresh: refreshProfileData } = useProfile();
   const { mySquads, refresh: refreshSquads } = useSquads();
-  const { refresh: refreshHistory } = useStepHistory('last-14');
+  const { refresh: refreshHistory } = useStepHistory('week', 0);
 
   const syncStepsToSupabase = React.useCallback(async () => {
     if (!session?.user) return;

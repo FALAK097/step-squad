@@ -113,7 +113,7 @@ export default function SquadsScreen() {
   return (
     <View className="flex-1 bg-background">
       {loading && mySquads.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
+        <View className="items-center justify-center flex-1">
           <ActivityIndicator size="large" />
         </View>
       ) : selectedSquad ? (
@@ -129,14 +129,14 @@ export default function SquadsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 20 }}
           ListHeaderComponent={
-            <View className="mb-6 gap-4">
+            <View className="gap-4 mb-6">
               <View className="flex-row gap-4">
                 <Pressable
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setIsCreateModalOpen(true);
                   }}
-                  className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-primary p-4 active:opacity-80">
+                  className="flex-row items-center justify-center flex-1 gap-2 p-4 rounded-2xl bg-primary active:opacity-80">
                   <Icon as={Plus} size={20} className="text-primary-foreground" />
                   <Text className="font-bold text-primary-foreground">Create Squad</Text>
                 </Pressable>
@@ -146,7 +146,7 @@ export default function SquadsScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setIsJoinModalOpen(true);
                   }}
-                  className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:bg-muted">
+                  className="flex-row items-center justify-center flex-1 gap-2 p-4 border rounded-2xl border-border bg-card active:bg-muted">
                   <Icon as={Search} size={20} className="text-foreground" />
                   <Text className="font-bold text-foreground">Join Squad</Text>
                 </Pressable>
@@ -156,15 +156,15 @@ export default function SquadsScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <View className="mb-4 overflow-hidden rounded-2xl border border-border bg-card">
+            <View className="mb-4 overflow-hidden border rounded-2xl border-border bg-card">
               <Pressable
                 onPress={() => {
                   Haptics.selectionAsync();
                   setSelectedSquad(item);
                 }}
                 className="flex-row items-center justify-between p-5 active:bg-muted">
-                <View className="flex-1 flex-row items-center gap-4">
-                  <View className="h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                <View className="flex-row items-center flex-1 gap-4">
+                  <View className="items-center justify-center w-12 h-12 rounded-xl bg-primary/10">
                     <Icon as={Users} size={24} className="text-primary" />
                   </View>
                   <View className="flex-1">
@@ -181,7 +181,7 @@ export default function SquadsScreen() {
               <View className="flex-row border-t border-border/40 bg-muted/10">
                 <Pressable
                   onPress={() => shareInvite(item)}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 active:bg-muted">
+                  className="flex-row items-center justify-center flex-1 gap-2 py-3 active:bg-muted">
                   <Icon as={Share2} size={14} className="text-primary" />
                   <Text className="text-[10px] font-bold uppercase tracking-widest text-primary">
                     Share
@@ -190,7 +190,7 @@ export default function SquadsScreen() {
                 <View className="w-[1px] bg-border/40" />
                 <Pressable
                   onPress={() => handleDelete(item)}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 active:bg-muted">
+                  className="flex-row items-center justify-center flex-1 gap-2 py-3 active:bg-muted">
                   <Icon
                     as={item.created_by === session?.user?.id ? Trash2 : LogOut}
                     size={14}
@@ -204,12 +204,12 @@ export default function SquadsScreen() {
             </View>
           )}
           ListEmptyComponent={
-            <View className="mt-10 items-center justify-center py-10">
+            <View className="items-center justify-center py-10 mt-10">
               <Icon as={Users} size={64} className="mb-4 text-muted-foreground/20" />
               <Text className="text-lg font-medium text-muted-foreground">
                 You haven't joined any squads yet.
               </Text>
-              <Text className="mt-2 text-center text-sm text-muted-foreground">
+              <Text className="mt-2 text-sm text-center text-muted-foreground">
                 Create one to compete with friends or join using an invite code.
               </Text>
             </View>
@@ -244,12 +244,12 @@ function AvatarView({ url, name, size = 40 }: { url: string | null; name: string
   return (
     <View
       style={{ width: size, height: size }}
-      className="items-center justify-center overflow-hidden rounded-full border border-border bg-primary/10">
+      className="items-center justify-center overflow-hidden border rounded-full border-border bg-primary/10">
       {url ? (
         url.includes('dicebear.com') || url.includes('.svg') ? (
           <SvgCssUri uri={url} width="100%" height="100%" />
         ) : (
-          <Image source={{ uri: url }} className="h-full w-full" />
+          <Image source={{ uri: url }} className="w-full h-full" />
         )
       ) : (
         <Text style={{ fontSize: size * 0.4 }} className="font-bold text-primary">
@@ -271,15 +271,17 @@ function SquadDetails({
   onLeave: (squadId: string) => Promise<void>;
   onDelete: (squadId: string) => Promise<void>;
 }) {
-  const [timeframe, setTimeframe] = React.useState<'daily' | 'weekly'>('weekly');
-  const { members, loading, refresh } = useSquadDetails(squad.id, timeframe);
+  const [timeframe, setTimeframe] = React.useState<'daily' | 'weekly'>('daily');
   const { session } = useAuth();
   const isAdmin = squad.created_by === session?.user?.id;
   const [showOptions, setShowOptions] = React.useState(false);
 
+  // Separate query for members to avoid context/re-fetch issues
+  const { members, loading, refresh } = useSquadDetails(squad.id, timeframe);
+
   React.useEffect(() => {
     refresh();
-  }, [timeframe, refresh]);
+  }, [timeframe]);
 
   const shareInvite = async () => {
     try {
@@ -325,14 +327,14 @@ function SquadDetails({
 
   return (
     <View className="flex-1 bg-background">
-      <View className="flex-row items-center justify-between border-b border-border bg-card px-6 py-4">
-        <Pressable onPress={onClose} className="-ml-2 p-2">
+      <View className="flex-row items-center justify-between px-6 py-4 border-b border-border bg-card">
+        <Pressable onPress={onClose} className="p-2 -ml-2">
           <Icon as={X} size={24} className="text-foreground" />
         </Pressable>
-        <Text className="flex-1 text-center text-xl font-bold text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-xl font-bold text-center text-foreground" numberOfLines={1}>
           {squad.name}
         </Text>
-        <Pressable onPress={() => setShowOptions(true)} className="-mr-2 p-2">
+        <Pressable onPress={() => setShowOptions(true)} className="p-2 -mr-2">
           <Icon as={MoreVertical} size={24} className="text-foreground" />
         </Pressable>
       </View>
@@ -342,20 +344,20 @@ function SquadDetails({
         keyExtractor={(item) => item.user_id}
         contentContainerStyle={{ padding: 20 }}
         ListHeaderComponent={
-          <View className="mb-6 flex-row items-center justify-between gap-2">
+          <View className="flex-row items-center justify-between gap-2 mb-6">
             <View className="flex-1 flex-row items-center gap-1.5">
               <Icon as={Trophy} size={18} className="text-yellow-500" />
               <Text className="text-base font-bold text-foreground" numberOfLines={1}>
                 {timeframe === 'daily' ? 'Daily' : 'Weekly'} Leaderboard
               </Text>
             </View>
-            <View className="flex-row gap-1 rounded-xl bg-muted p-1">
+            <View className="flex-row gap-1 p-1 rounded-xl bg-muted">
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setTimeframe('daily');
                 }}
-                className={`rounded-lg px-3 py-1.5 ${timeframe === 'daily' ? 'bg-background shadow-sm' : ''}`}>
+                className={`rounded-lg px-3 py-1.5 ${timeframe === 'daily' ? 'bg-background' : ''}`}>
                 <Text
                   className={`text-[10px] font-black uppercase tracking-tight ${timeframe === 'daily' ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Daily
@@ -366,7 +368,7 @@ function SquadDetails({
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setTimeframe('weekly');
                 }}
-                className={`rounded-lg px-3 py-1.5 ${timeframe === 'weekly' ? 'bg-background shadow-sm' : ''}`}>
+                className={`rounded-lg px-3 py-1.5 ${timeframe === 'weekly' ? 'bg-background' : ''}`}>
                 <Text
                   className={`text-[10px] font-black uppercase tracking-tight ${timeframe === 'weekly' ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Weekly
@@ -404,7 +406,7 @@ function SquadDetails({
           loading ? (
             <ActivityIndicator className="my-10" />
           ) : (
-            <View className="my-10 items-center">
+            <View className="items-center my-10">
               <Text className="text-muted-foreground">No data for this period</Text>
             </View>
           )
@@ -412,14 +414,14 @@ function SquadDetails({
       />
 
       <Modal visible={showOptions} transparent animationType="fade">
-        <Pressable onPress={() => setShowOptions(false)} className="flex-1 justify-end bg-black/40">
-          <View className="gap-2 rounded-t-3xl bg-background p-6 pb-12">
+        <Pressable onPress={() => setShowOptions(false)} className="justify-end flex-1 bg-black/40">
+          <View className="gap-2 p-6 pb-12 rounded-t-3xl bg-background">
             <Pressable
               onPress={() => {
                 shareInvite();
                 setShowOptions(false);
               }}
-              className="flex-row items-center gap-4 rounded-2xl p-4 active:bg-muted">
+              className="flex-row items-center gap-4 p-4 rounded-2xl active:bg-muted">
               <Icon as={Share2} size={20} className="text-foreground" />
               <Text className="text-lg font-medium text-foreground">Share Invite</Text>
             </Pressable>
@@ -430,7 +432,7 @@ function SquadDetails({
                   handleDelete();
                   setShowOptions(false);
                 }}
-                className="flex-row items-center gap-4 rounded-2xl p-4 active:bg-muted">
+                className="flex-row items-center gap-4 p-4 rounded-2xl active:bg-muted">
                 <Icon as={Trash2} size={20} className="text-destructive" />
                 <Text className="text-lg font-medium text-destructive">Delete Squad</Text>
               </Pressable>
@@ -440,14 +442,14 @@ function SquadDetails({
                   handleLeave();
                   setShowOptions(false);
                 }}
-                className="flex-row items-center gap-4 rounded-2xl p-4 active:bg-muted">
+                className="flex-row items-center gap-4 p-4 rounded-2xl active:bg-muted">
                 <Icon as={LogOut} size={20} className="text-destructive" />
                 <Text className="text-lg font-medium text-destructive">Leave Squad</Text>
               </Pressable>
             )}
             <Pressable
               onPress={() => setShowOptions(false)}
-              className="mt-4 items-center rounded-2xl bg-muted p-5">
+              className="items-center p-5 mt-4 rounded-2xl bg-muted">
               <Text className="text-lg font-bold text-foreground">Cancel</Text>
             </Pressable>
           </View>
@@ -481,12 +483,12 @@ function CreateSquadModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View className="flex-1 justify-center bg-black/50 p-6">
+      <View className="justify-center flex-1 p-6 bg-black/50">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="w-full">
-          <View className="rounded-3xl bg-background p-8 shadow-2xl">
-            <View className="mb-6 flex-row items-center justify-between">
+          <View className="p-8 shadow-2xl rounded-3xl bg-background">
+            <View className="flex-row items-center justify-between mb-6">
               <Text className="text-2xl font-bold text-foreground">Create Squad</Text>
               <Pressable onPress={onClose} className="p-2">
                 <Icon as={X} size={24} className="text-foreground" />
@@ -501,7 +503,7 @@ function CreateSquadModal({
                   onChangeText={setName}
                   placeholder="e.g. Morning Walkers"
                   placeholderTextColor="#888"
-                  className="rounded-2xl border border-border bg-card p-4 text-foreground"
+                  className="p-4 border rounded-2xl border-border bg-card text-foreground"
                   autoCorrect={false}
                 />
               </View>
@@ -515,7 +517,7 @@ function CreateSquadModal({
                   placeholderTextColor="#888"
                   multiline
                   numberOfLines={3}
-                  className="h-20 rounded-2xl border border-border bg-card p-4 text-foreground"
+                  className="h-20 p-4 border rounded-2xl border-border bg-card text-foreground"
                   autoCorrect={false}
                 />
               </View>
@@ -566,12 +568,12 @@ function JoinSquadModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View className="flex-1 justify-center bg-black/50 p-6">
+      <View className="justify-center flex-1 p-6 bg-black/50">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="w-full">
-          <View className="rounded-3xl bg-background p-8 shadow-2xl">
-            <View className="mb-6 flex-row items-center justify-between">
+          <View className="p-8 shadow-2xl rounded-3xl bg-background">
+            <View className="flex-row items-center justify-between mb-6">
               <Text className="text-2xl font-bold text-foreground">Join Squad</Text>
               <Pressable onPress={onClose} className="p-2">
                 <Icon as={X} size={24} className="text-foreground" />
@@ -588,7 +590,7 @@ function JoinSquadModal({
                   placeholderTextColor="#888"
                   autoCapitalize="characters"
                   autoCorrect={false}
-                  className="rounded-2xl border border-border bg-card p-5 text-center text-2xl font-bold tracking-widest text-primary"
+                  className="p-5 text-2xl font-bold tracking-widest text-center border rounded-2xl border-border bg-card text-primary"
                 />
               </View>
 
