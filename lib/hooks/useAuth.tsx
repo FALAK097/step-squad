@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -43,40 +44,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = React.useCallback(async () => {
     const redirectTo = Linking.createURL('/');
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true,
-      },
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    if (data?.url) {
-      const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (res.type === 'success') {
-        setLoading(true); // Ensure loading is true while we process the session
-        const { url } = res;
+      if (data?.url) {
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (res.type === 'success') {
+          setLoading(true);
+          const { url } = res;
 
-        const params = url.split('#')[1];
-        if (params) {
-          const queryParams: Record<string, string> = {};
-          params.split('&').forEach((part) => {
-            const [key, value] = part.split('=');
-            queryParams[key] = value;
-          });
-
-          const access_token = queryParams.access_token;
-          const refresh_token = queryParams.refresh_token;
-
-          if (access_token && refresh_token) {
-            await supabase.auth.setSession({
-              access_token,
-              refresh_token,
+          const params = url.split('#')[1];
+          if (params) {
+            const queryParams: Record<string, string> = {};
+            params.split('&').forEach((part) => {
+              const [key, value] = part.split('=');
+              queryParams[key] = value;
             });
+
+            const access_token = queryParams.access_token;
+            const refresh_token = queryParams.refresh_token;
+
+            if (access_token && refresh_token) {
+              const { error: sessionError } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+              if (sessionError) throw sessionError;
+              return;
+            }
           }
         }
+      }
+    } catch (e) {
+      console.error('Google Sign In Error:', e);
+    } finally {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+      if (!currentSession) {
+        setLoading(false);
       }
     }
   }, []);
