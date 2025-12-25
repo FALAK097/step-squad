@@ -5,15 +5,25 @@ export type DateRange = {
 
 /**
  * Returns ISO8601 timestamps for the current day's start (midnight) and now.
+ * Uses UTC format which Health Connect expects.
  */
 export function getTodayRange(): DateRange {
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
 
+  // Force a 10-millisecond buffer to ensure start is always strictly before end
+  // even if the clock hasn't ticked much since the start of the day.
+  const startTime = start.getTime();
+  let endTime = now.getTime();
+
+  if (endTime <= startTime) {
+    endTime = startTime + 10000; // +10 seconds safety buffer
+  }
+
   return {
-    start: start.toISOString(),
-    end: now.toISOString(),
+    start: new Date(startTime).toISOString(),
+    end: new Date(endTime).toISOString(),
   };
 }
 
@@ -24,12 +34,29 @@ export function formatTime(time: Date | string | null | undefined): string {
   if (!time) return '';
   const date = typeof time === 'string' ? new Date(time) : time;
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
+      hour12: true,
     }).format(date);
-  } catch (error) {
-    // Fallback for environments without Intl
+  } catch {
     return date.toLocaleTimeString();
+  }
+}
+
+/**
+ * Formats a date for display.
+ */
+export function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+    }).format(d);
+  } catch {
+    return d.toLocaleDateString();
   }
 }
