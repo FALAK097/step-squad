@@ -6,7 +6,7 @@ import { ThemeProvider } from '@react-navigation/native';
 import { PortalHost } from '@rn-primitives/portal';
 import { Redirect, Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Footprints, Settings, TrendingUp } from 'lucide-react-native';
+import { Footprints, Settings, TrendingUp, Users } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -69,6 +69,17 @@ export default function TabLayout() {
             ),
           }}
         />
+
+        <Tabs.Screen
+          name="squads"
+          options={{
+            title: 'Squads',
+            tabBarIcon: ({ focused }) => (
+              <Users size={22} color={focused ? iconColor : inactiveColor} />
+            ),
+          }}
+        />
+
         <Tabs.Screen
           name="settings"
           options={{

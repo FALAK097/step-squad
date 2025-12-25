@@ -30,6 +30,73 @@ export function getTodayRange(): DateRange {
   };
 }
 
+export function getLastNDaysRange(n: number): DateRange {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (n - 1), 0, 0, 0, 0);
+  const startTime = Math.floor(start.getTime() / 1000) * 1000;
+  const endTime = Math.floor(now.getTime() / 1000) * 1000;
+  return {
+    start: new Date(startTime).toISOString(),
+    end: new Date(endTime).toISOString(),
+  };
+}
+
+/**
+ * Returns the start of the week (Sunday) for a given date.
+ */
+export function getStartOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Returns the end of the week (Saturday) for a given date.
+ */
+export function getEndOfWeek(date: Date): Date {
+  const start = getStartOfWeek(date);
+  return new Date(start.setDate(start.getDate() + 6));
+}
+
+/**
+ * Returns a range for a specific week based on an offset from the current week.
+ * offset 0 = current week, -1 = last week, etc.
+ */
+export function getWeekRange(offset: number = 0): DateRange {
+  const now = new Date();
+  const targetDate = new Date(now.setDate(now.getDate() + offset * 7));
+
+  const start = getStartOfWeek(targetDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = getEndOfWeek(targetDate);
+  end.setHours(23, 59, 59, 999);
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
+/**
+ * Returns the current date in YYYY-MM-DD format based on LOCAL time.
+ */
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Normalizes an ISO string or Date to a local date string (YYYY-MM-DD).
+ */
+export function toDateString(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return getLocalDateString(d);
+}
+
 /**
  * Formats a timestamp into a short, locale-aware time string suitable for UI.
  */
