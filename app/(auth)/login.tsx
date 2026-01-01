@@ -21,7 +21,7 @@ const ONBOARDING_STEPS = [
   },
   {
     title: 'The Squad',
-    description: 'Connect with Google to start your journey today.',
+    description: 'Compete with friends and climb the leaderboard together.',
     image: require('@/assets/images/onboarding-3.png'),
   },
 ];

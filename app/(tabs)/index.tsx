@@ -13,6 +13,7 @@ import {
   requestStepPermission,
   readDailyStepsHistory,
 } from '@/lib/health/healthConnect';
+import { setupNotifications } from '@/lib/notifications';
 import { useStepGoal } from '@/lib/hooks/useStepGoal';
 import { useStepHistory } from '@/lib/hooks/useStepHistory';
 import { useProfile } from '@/lib/hooks/useProfile';
@@ -63,6 +64,76 @@ export default function HomeScreen() {
     }
   }, [session?.user, refreshHistory]);
 
+  const calculateLeaderboardStatus = React.useCallback(async () => {
+    if (!session?.user) {
+      return { hasSquadWithOthers: false, isFirstPlace: false };
+    }
+
+    try {
+      // Fetch squads directly to ensure we have latest data
+      const { data: squadsData, error: squadsError } = await supabase
+        .from('squad_members')
+        .select('squad_id')
+        .eq('user_id', session.user.id);
+
+      if (squadsError) throw squadsError;
+      if (!squadsData || squadsData.length === 0) return { hasSquadWithOthers: false, isFirstPlace: false };
+
+      const squadIds = squadsData.map((s) => s.squad_id);
+      
+      // Check if any squad has other members
+      const { data: membersData, error: membersError } = await supabase
+        .from('squad_members')
+        .select('squad_id, user_id')
+        .in('squad_id', squadIds);
+
+      if (membersError) throw membersError;
+
+      const squadMemberCounts = squadIds.reduce((acc, id) => {
+        acc[id] = membersData.filter(m => m.squad_id === id).length;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const hasSquadWithOthers = Object.values(squadMemberCounts).some((count) => (count as number) > 1);
+      if (!hasSquadWithOthers) return { hasSquadWithOthers: false, isFirstPlace: false };
+
+      // Get ranks
+      const today = new Date().toISOString().split('T')[0];
+      const { data: stepsData, error: stepsError } = await supabase
+        .from('daily_steps')
+        .select('user_id, steps')
+        .eq('date', today)
+        .in('user_id', membersData.map(m => m.user_id));
+
+      if (stepsError) throw stepsError;
+
+      let userIsFirstEverywhere = true;
+
+      for (const squadId of squadIds) {
+        if (squadMemberCounts[squadId] <= 1) continue;
+
+        const squadUserIds = membersData.filter(m => m.squad_id === squadId).map(m => m.user_id);
+        const squadSteps = squadUserIds.map(uid => ({
+          user_id: uid,
+          steps: stepsData.filter(s => s.user_id === uid).reduce((sum, s) => sum + s.steps, 0)
+        })).sort((a, b) => b.steps - a.steps);
+
+        const myRank = squadSteps.findIndex(s => s.user_id === session.user.id) + 1;
+        if (myRank > 1) {
+          userIsFirstEverywhere = false;
+        }
+      }
+
+      return { 
+        hasSquadWithOthers, 
+        isFirstPlace: userIsFirstEverywhere && hasSquadWithOthers 
+      };
+    } catch (error) {
+      console.error('[LeaderboardStatus] Error:', error);
+      return { hasSquadWithOthers: false, isFirstPlace: false };
+    }
+  }, [session?.user, mySquads]);
+
   const load = React.useCallback(
     async (options: { requestPermission: boolean }) => {
       setRefreshing(true);
@@ -103,7 +174,15 @@ export default function HomeScreen() {
         setLastUpdated(new Date());
         setUiState('ready');
 
-        syncStepsToSupabase();
+        await syncStepsToSupabase();
+        
+        const status = await calculateLeaderboardStatus();
+        setupNotifications({
+          steps: stepData.totalSteps,
+          goal: goal,
+          hasSquadWithOthers: status.hasSquadWithOthers,
+          isFirstPlace: status.isFirstPlace,
+        });
       } catch (error) {
         console.error('[HomeScreen] Error:', error);
         setUiState('error');
@@ -112,14 +191,17 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     },
-    [syncStepsToSupabase]
+    [syncStepsToSupabase, calculateLeaderboardStatus, goal]
   );
 
   useFocusEffect(
     React.useCallback(() => {
-      refreshProfileData();
-      refreshSquads();
-      load({ requestPermission: true });
+      const init = async () => {
+        await refreshProfileData();
+        await refreshSquads();
+        load({ requestPermission: true });
+      };
+      init();
     }, [load, refreshProfileData, refreshSquads])
   );
 
@@ -155,19 +237,19 @@ export default function HomeScreen() {
           {/* Header */}
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+              <Text className="text-xs font-black tracking-widest uppercase text-muted-foreground">
                 {formatDate(new Date())}
               </Text>
               <Text className="text-3xl font-black text-foreground">
                 Hey {displayName.split(' ')[0]} 👋
               </Text>
             </View>
-            <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-primary/20 p-1">
+            <View className="items-center justify-center p-1 overflow-hidden border-2 rounded-full h-14 w-14 border-primary/20">
               {avatarUrl ? (
                 avatarUrl.includes('dicebear.com') || avatarUrl.includes('.svg') ? (
                   <SvgCssUri uri={avatarUrl} width="100%" height="100%" />
                 ) : (
-                  <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
+                  <Image source={{ uri: avatarUrl }} className="w-full h-full rounded-full" />
                 )
               ) : (
                 <Text className="text-lg font-black text-primary">{initials}</Text>
@@ -191,7 +273,7 @@ export default function HomeScreen() {
                 <Icon as={Users} size={20} className="text-primary" />
               </View>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5 px-5">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-5 -mx-5">
                 {mySquads.map((squad) => (
                   <SquadPreviewCard key={squad.id} squad={squad} userId={session?.user?.id || ''} />
                 ))}
@@ -255,7 +337,7 @@ function SquadPreviewCard({ squad, userId }: { squad: any; userId: string }) {
         Haptics.selectionAsync();
         router.push({ pathname: '/squads', params: { squadId: squad.id } });
       }}
-      className="mr-4 w-48 rounded-3xl border border-border bg-card p-5 shadow-sm active:bg-muted">
+      className="w-48 p-5 mr-4 border shadow-sm rounded-3xl border-border bg-card active:bg-muted">
       <Text className="mb-1 text-sm font-black text-foreground" numberOfLines={1}>
         {squad.name}
       </Text>
@@ -264,7 +346,7 @@ function SquadPreviewCard({ squad, userId }: { squad: any; userId: string }) {
       </Text>
 
       <View className="flex-row items-center justify-between">
-        <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+        <View className="items-center justify-center w-12 h-12 rounded-2xl bg-primary/10">
           <Text className="text-2xl font-black text-primary">{myRank}</Text>
         </View>
         <View className="items-end">
