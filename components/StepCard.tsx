@@ -36,8 +36,8 @@ export function StepCard({
   const updatedLabel = lastUpdated ? formatTime(lastUpdated) : null;
   const isGoalMet = steps >= goal;
 
-  const primaryColor = colorScheme === 'dark' ? '#FFFFFF' : '#000000';
-  const trackColor = colorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+  const primaryColor = '#10B981';
+  const trackColor = colorScheme === 'dark' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.05)';
 
   return (
     <View className="w-full rounded-[40px] border border-border bg-card p-6 shadow-sm">

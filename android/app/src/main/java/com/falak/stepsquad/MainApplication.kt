@@ -1,4 +1,4 @@
-package com.anonymous.stepsquad
+package com.falak.stepsquad
 
 import android.app.Application
 import android.content.res.Configuration

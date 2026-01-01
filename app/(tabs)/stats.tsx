@@ -4,6 +4,7 @@ import { useStepGoal } from '@/lib/hooks/useStepGoal';
 import { useStepHistory } from '@/lib/hooks/useStepHistory';
 import { getStartOfWeek, getEndOfWeek } from '@/lib/utils/date';
 import { ChevronLeft, ChevronRight, Clock, Flame, TrendingUp } from 'lucide-react-native';
+import { useColorScheme } from 'nativewind';
 import * as React from 'react';
 import { Pressable, RefreshControl, ScrollView, View, type DimensionValue } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -13,6 +14,7 @@ type ViewMode = 'week' | 'month';
 export default function StatsScreen() {
   const [viewMode, setViewMode] = React.useState<ViewMode>('week');
   const [offset, setOffset] = React.useState(0);
+  const { colorScheme } = useColorScheme();
   const { history, loading, refresh } = useStepHistory(viewMode, offset);
   const { goal } = useStepGoal();
 
@@ -210,10 +212,10 @@ export default function StatsScreen() {
             <View className="flex-row flex-wrap justify-center gap-2.5">
               {history.map((day) => {
                 const intensity = Math.min(day.steps / goal, 1);
-                let bgColor = 'rgba(0,0,0,0.05)';
-                if (intensity >= 1) bgColor = '#000000';
-                else if (intensity > 0.5) bgColor = 'rgba(0,0,0,0.6)';
-                else if (intensity > 0) bgColor = 'rgba(0,0,0,0.2)';
+                let bgColor = colorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                if (intensity >= 1) bgColor = '#10B981';
+                else if (intensity > 0.5) bgColor = 'rgba(16, 185, 129, 0.6)';
+                else if (intensity > 0) bgColor = 'rgba(16, 185, 129, 0.2)';
 
                 const isSelected = selectedDay === day.date;
                 const isFuture = day.date > todayStr;

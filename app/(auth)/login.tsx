@@ -12,23 +12,17 @@ const ONBOARDING_STEPS = [
   {
     title: 'Step Squad',
     description: 'Track your steps and stay active with your friends.',
-    icon: Footprints,
-    color: 'bg-zinc-900 dark:bg-zinc-100',
-    iconColor: 'text-zinc-100 dark:text-zinc-900',
+    image: require('@/assets/images/onboarding-1.png'),
   },
   {
     title: 'Milestones',
     description: 'Set daily goals and track your progress with precision.',
-    icon: TrendingUp,
-    color: 'bg-zinc-900 dark:bg-zinc-100',
-    iconColor: 'text-zinc-100 dark:text-zinc-900',
+    image: require('@/assets/images/onboarding-2.png'),
   },
   {
     title: 'The Squad',
     description: 'Connect with Google to start your journey today.',
-    icon: Users,
-    color: 'bg-zinc-900 dark:bg-zinc-100',
-    iconColor: 'text-zinc-100 dark:text-zinc-900',
+    image: require('@/assets/images/onboarding-3.png'),
   },
 ];
 
@@ -64,7 +58,7 @@ export default function LoginScreen() {
           {ONBOARDING_STEPS.map((_, index) => (
             <View
               key={index}
-              className={`h-1 w-8 rounded-full ${index === currentStep ? 'bg-foreground' : 'bg-muted'}`}
+              className={`h-1 w-8 rounded-full ${index === currentStep ? 'bg-primary' : 'bg-muted'}`}
             />
           ))}
         </View>
@@ -75,16 +69,15 @@ export default function LoginScreen() {
           entering={SlideInRight.springify().damping(22).stiffness(150)}
           exiting={SlideOutLeft}
           className="items-center justify-center flex-1">
-          <View
-            className={`h-24 w-24 ${step.color} mb-12 items-center justify-center rounded-[28px] shadow-sm`}>
-            <Icon as={step.icon} size={42} className={step.iconColor} />
+          <View className="mb-12 items-center justify-center overflow-hidden rounded-[40px] bg-card p-4 shadow-sm">
+            <Image source={step.image} style={{ width: 200, height: 200 }} resizeMode="contain" />
           </View>
 
-          <Text className="text-3xl font-semibold tracking-tight text-center text-foreground">
+          <Text className="text-3xl font-black tracking-tight text-center text-foreground">
             {step.title}
           </Text>
 
-          <Text className="mt-4 max-w-[280px] text-center text-base leading-relaxed text-muted-foreground">
+          <Text className="mt-4 max-w-[280px] text-center text-base leading-relaxed text-muted-foreground font-medium">
             {step.description}
           </Text>
         </Animated.View>
@@ -95,8 +88,8 @@ export default function LoginScreen() {
             <Button
               onPress={handleNext}
               size="lg"
-              className="h-14 rounded-2xl bg-foreground active:opacity-90">
-              <Text className="font-medium text-background">Continue</Text>
+              className="h-14 rounded-2xl bg-primary active:opacity-90">
+              <Text className="font-medium text-primary-foreground">Continue</Text>
             </Button>
           ) : (
             <Animated.View entering={FadeIn.duration(400)}>

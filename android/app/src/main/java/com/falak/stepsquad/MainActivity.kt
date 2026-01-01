@@ -1,4 +1,4 @@
-package com.anonymous.stepsquad
+package com.falak.stepsquad
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

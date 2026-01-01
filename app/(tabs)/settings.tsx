@@ -69,7 +69,7 @@ function SettingsItem({
   return (
     <Pressable
       onPress={onPress}
-      className={`flex-row items-center gap-4 py-4 active:bg-accent/50 ${
+      className={`flex-row items-center gap-4 px-5 py-4 active:bg-accent/50 ${
         !isLast ? 'border-b border-border/40' : ''
       }`}>
       <View className="items-center justify-center w-5 h-5">
@@ -101,7 +101,7 @@ function SettingsSection({ title, children }: { title: string; children: React.R
       <Text className="mb-3 px-1 text-[11px] font-bold uppercase tracking-[2px] text-muted-foreground/60">
         {title}
       </Text>
-      <View className="px-5 overflow-hidden border rounded-2xl border-border/40 bg-card">
+      <View className="overflow-hidden border rounded-2xl border-border/40 bg-card">
         {children}
       </View>
     </View>
@@ -209,7 +209,7 @@ export default function SettingsScreen() {
   }, [activeStyle]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'background' }}>
+    <View className="flex-1 bg-background">
       {/* Goal Modal */}
       <Modal
         visible={goalModalVisible}
@@ -293,7 +293,9 @@ export default function SettingsScreen() {
         visible={avatarModalVisible}
         animationType="slide"
         onRequestClose={() => setAvatarModalVisible(false)}>
-        <View style={{ flex: 1, backgroundColor: 'background', paddingTop: insets.top }}>
+        <View
+          className="flex-1 bg-background"
+          style={{ paddingTop: insets.top }}>
           <View className="flex-row items-center justify-between px-6 py-6 border-b border-border bg-card">
             <Pressable onPress={() => setAvatarModalVisible(false)} className="p-2 -ml-2">
               <Icon as={ChevronLeft} size={28} className="text-foreground" />
