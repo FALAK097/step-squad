@@ -36,6 +36,7 @@ export default function HomeScreen() {
   const [lastUpdated, setLastUpdated] = React.useState<Date | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const isInitialMount = React.useRef(true);
 
   const { goal } = useStepGoal();
   const { session } = useAuth();
@@ -77,10 +78,11 @@ export default function HomeScreen() {
         .eq('user_id', session.user.id);
 
       if (squadsError) throw squadsError;
-      if (!squadsData || squadsData.length === 0) return { hasSquadWithOthers: false, isFirstPlace: false };
+      if (!squadsData || squadsData.length === 0)
+        return { hasSquadWithOthers: false, isFirstPlace: false };
 
       const squadIds = squadsData.map((s) => s.squad_id);
-      
+
       // Check if any squad has other members
       const { data: membersData, error: membersError } = await supabase
         .from('squad_members')
@@ -89,12 +91,17 @@ export default function HomeScreen() {
 
       if (membersError) throw membersError;
 
-      const squadMemberCounts = squadIds.reduce((acc, id) => {
-        acc[id] = membersData.filter(m => m.squad_id === id).length;
-        return acc;
-      }, {} as Record<string, number>);
+      const squadMemberCounts = squadIds.reduce(
+        (acc, id) => {
+          acc[id] = membersData.filter((m) => m.squad_id === id).length;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
 
-      const hasSquadWithOthers = Object.values(squadMemberCounts).some((count) => (count as number) > 1);
+      const hasSquadWithOthers = Object.values(squadMemberCounts).some(
+        (count) => (count as number) > 1
+      );
       if (!hasSquadWithOthers) return { hasSquadWithOthers: false, isFirstPlace: false };
 
       // Get ranks
@@ -103,7 +110,10 @@ export default function HomeScreen() {
         .from('daily_steps')
         .select('user_id, steps')
         .eq('date', today)
-        .in('user_id', membersData.map(m => m.user_id));
+        .in(
+          'user_id',
+          membersData.map((m) => m.user_id)
+        );
 
       if (stepsError) throw stepsError;
 
@@ -112,30 +122,35 @@ export default function HomeScreen() {
       for (const squadId of squadIds) {
         if (squadMemberCounts[squadId] <= 1) continue;
 
-        const squadUserIds = membersData.filter(m => m.squad_id === squadId).map(m => m.user_id);
-        const squadSteps = squadUserIds.map(uid => ({
-          user_id: uid,
-          steps: stepsData.filter(s => s.user_id === uid).reduce((sum, s) => sum + s.steps, 0)
-        })).sort((a, b) => b.steps - a.steps);
+        const squadUserIds = membersData
+          .filter((m) => m.squad_id === squadId)
+          .map((m) => m.user_id);
+        const squadSteps = squadUserIds
+          .map((uid) => ({
+            user_id: uid,
+            steps: stepsData.filter((s) => s.user_id === uid).reduce((sum, s) => sum + s.steps, 0),
+          }))
+          .sort((a, b) => b.steps - a.steps);
 
-        const myRank = squadSteps.findIndex(s => s.user_id === session.user.id) + 1;
+        const myRank = squadSteps.findIndex((s) => s.user_id === session.user.id) + 1;
         if (myRank > 1) {
           userIsFirstEverywhere = false;
         }
       }
 
-      return { 
-        hasSquadWithOthers, 
-        isFirstPlace: userIsFirstEverywhere && hasSquadWithOthers 
+      return {
+        hasSquadWithOthers,
+        isFirstPlace: userIsFirstEverywhere && hasSquadWithOthers,
       };
     } catch (error) {
       console.error('[LeaderboardStatus] Error:', error);
       return { hasSquadWithOthers: false, isFirstPlace: false };
     }
-  }, [session?.user, mySquads]);
+  }, [session?.user]);
 
   const load = React.useCallback(
     async (options: { requestPermission: boolean }) => {
+      if (refreshing) return;
       setRefreshing(true);
       setMessage(null);
 
@@ -175,7 +190,7 @@ export default function HomeScreen() {
         setUiState('ready');
 
         await syncStepsToSupabase();
-        
+
         const status = await calculateLeaderboardStatus();
         setupNotifications({
           steps: stepData.totalSteps,
@@ -197,9 +212,14 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const init = async () => {
-        await refreshProfileData();
-        await refreshSquads();
-        load({ requestPermission: true });
+        // Only run the full init on actual mount or if explicitly requested
+        // This prevents the focus effect from looping if state changes
+        if (isInitialMount.current) {
+          await refreshProfileData();
+          await refreshSquads();
+          load({ requestPermission: true });
+          isInitialMount.current = false;
+        }
       };
       init();
     }, [load, refreshProfileData, refreshSquads])
@@ -237,19 +257,19 @@ export default function HomeScreen() {
           {/* Header */}
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-xs font-black tracking-widest uppercase text-muted-foreground">
+              <Text className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                 {formatDate(new Date())}
               </Text>
               <Text className="text-3xl font-black text-foreground">
                 Hey {displayName.split(' ')[0]} 👋
               </Text>
             </View>
-            <View className="items-center justify-center p-1 overflow-hidden border-2 rounded-full h-14 w-14 border-primary/20">
+            <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-primary/20 p-1">
               {avatarUrl ? (
                 avatarUrl.includes('dicebear.com') || avatarUrl.includes('.svg') ? (
                   <SvgCssUri uri={avatarUrl} width="100%" height="100%" />
                 ) : (
-                  <Image source={{ uri: avatarUrl }} className="w-full h-full rounded-full" />
+                  <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
                 )
               ) : (
                 <Text className="text-lg font-black text-primary">{initials}</Text>
@@ -273,7 +293,7 @@ export default function HomeScreen() {
                 <Icon as={Users} size={20} className="text-primary" />
               </View>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-5 -mx-5">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5 px-5">
                 {mySquads.map((squad) => (
                   <SquadPreviewCard key={squad.id} squad={squad} userId={session?.user?.id || ''} />
                 ))}
@@ -337,7 +357,7 @@ function SquadPreviewCard({ squad, userId }: { squad: any; userId: string }) {
         Haptics.selectionAsync();
         router.push({ pathname: '/squads', params: { squadId: squad.id } });
       }}
-      className="w-48 p-5 mr-4 border shadow-sm rounded-3xl border-border bg-card active:bg-muted">
+      className="mr-4 w-48 rounded-3xl border border-border bg-card p-5 shadow-sm active:bg-muted">
       <Text className="mb-1 text-sm font-black text-foreground" numberOfLines={1}>
         {squad.name}
       </Text>
@@ -346,7 +366,7 @@ function SquadPreviewCard({ squad, userId }: { squad: any; userId: string }) {
       </Text>
 
       <View className="flex-row items-center justify-between">
-        <View className="items-center justify-center w-12 h-12 rounded-2xl bg-primary/10">
+        <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
           <Text className="text-2xl font-black text-primary">{myRank}</Text>
         </View>
         <View className="items-end">
