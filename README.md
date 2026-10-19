@@ -8,6 +8,12 @@ It was initialized using the following command:
 npx @react-native-reusables/cli@latest init -t step-squad
 ```
 
+## Backend (Neon)
+
+The app stores its data in [Neon](https://neon.tech) Postgres, accessed through the small API in [`server/`](server/README.md)
+(which also handles Google sign-in). Set `EXPO_PUBLIC_API_URL` (see [`.env.example`](.env.example)) to the API's URL.
+See [`server/README.md`](server/README.md) for setup, deployment, and how to migrate existing Supabase data.
+
 ## Getting Started
 
 To run the development server:

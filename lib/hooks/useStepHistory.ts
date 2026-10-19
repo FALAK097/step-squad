@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { api, qs } from '@/lib/utils/api';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 import { getLocalDateString, getWeekRange, getLastNDaysRange } from '../utils/date';
@@ -42,15 +42,9 @@ export function useStepHistory(mode: 'week' | 'month' | 'last-14' = 'week', offs
       const startDateString = getLocalDateString(startDate);
       const endDateString = getLocalDateString(endDate);
 
-      const { data, error } = await supabase
-        .from('daily_steps')
-        .select('date, steps')
-        .eq('user_id', session.user.id)
-        .gte('date', startDateString)
-        .lte('date', endDateString)
-        .order('date', { ascending: true });
-
-      if (error) throw error;
+      const data = await api.get<DailyStepRecord[]>(
+        `/steps?${qs({ start: startDateString, end: endDateString })}`
+      );
 
       // Fill missing days
       const filledData: DailyStepRecord[] = [];

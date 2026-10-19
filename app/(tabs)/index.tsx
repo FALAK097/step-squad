@@ -19,7 +19,7 @@ import { useStepHistory } from '@/lib/hooks/useStepHistory';
 import { useProfile } from '@/lib/hooks/useProfile';
 import { useSquads, useSquadDetails } from '@/lib/hooks/useSquads';
 import { formatDate } from '@/lib/utils/date';
-import { supabase } from '@/lib/utils/supabase';
+import { api, qs } from '@/lib/utils/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useFocusEffect, router } from 'expo-router';
 import { Trophy, Users } from 'lucide-react-native';
@@ -44,21 +44,13 @@ export default function HomeScreen() {
   const { mySquads, refresh: refreshSquads } = useSquads();
   const { refresh: refreshHistory } = useStepHistory('week', 0);
 
-  const syncStepsToSupabase = React.useCallback(async () => {
+  const syncSteps = React.useCallback(async () => {
     if (!session?.user) return;
     try {
       const historyData = await readDailyStepsHistory(14);
-      const data = historyData.map((item) => ({
-        user_id: session.user.id,
-        date: item.date,
-        steps: item.steps,
-      }));
-
-      const { error } = await supabase
-        .from('daily_steps')
-        .upsert(data, { onConflict: 'user_id,date' });
-
-      if (error) throw error;
+      await api.put('/steps', {
+        days: historyData.map((item) => ({ date: item.date, steps: item.steps })),
+      });
       refreshHistory();
     } catch (error) {
       console.error('[Sync] Error syncing steps:', error);
@@ -71,77 +63,10 @@ export default function HomeScreen() {
     }
 
     try {
-      // Fetch squads directly to ensure we have latest data
-      const { data: squadsData, error: squadsError } = await supabase
-        .from('squad_members')
-        .select('squad_id')
-        .eq('user_id', session.user.id);
-
-      if (squadsError) throw squadsError;
-      if (!squadsData || squadsData.length === 0)
-        return { hasSquadWithOthers: false, isFirstPlace: false };
-
-      const squadIds = squadsData.map((s) => s.squad_id);
-
-      // Check if any squad has other members
-      const { data: membersData, error: membersError } = await supabase
-        .from('squad_members')
-        .select('squad_id, user_id')
-        .in('squad_id', squadIds);
-
-      if (membersError) throw membersError;
-
-      const squadMemberCounts = squadIds.reduce(
-        (acc, id) => {
-          acc[id] = membersData.filter((m) => m.squad_id === id).length;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      const hasSquadWithOthers = Object.values(squadMemberCounts).some(
-        (count) => (count as number) > 1
-      );
-      if (!hasSquadWithOthers) return { hasSquadWithOthers: false, isFirstPlace: false };
-
-      // Get ranks
       const today = new Date().toISOString().split('T')[0];
-      const { data: stepsData, error: stepsError } = await supabase
-        .from('daily_steps')
-        .select('user_id, steps')
-        .eq('date', today)
-        .in(
-          'user_id',
-          membersData.map((m) => m.user_id)
-        );
-
-      if (stepsError) throw stepsError;
-
-      let userIsFirstEverywhere = true;
-
-      for (const squadId of squadIds) {
-        if (squadMemberCounts[squadId] <= 1) continue;
-
-        const squadUserIds = membersData
-          .filter((m) => m.squad_id === squadId)
-          .map((m) => m.user_id);
-        const squadSteps = squadUserIds
-          .map((uid) => ({
-            user_id: uid,
-            steps: stepsData.filter((s) => s.user_id === uid).reduce((sum, s) => sum + s.steps, 0),
-          }))
-          .sort((a, b) => b.steps - a.steps);
-
-        const myRank = squadSteps.findIndex((s) => s.user_id === session.user.id) + 1;
-        if (myRank > 1) {
-          userIsFirstEverywhere = false;
-        }
-      }
-
-      return {
-        hasSquadWithOthers,
-        isFirstPlace: userIsFirstEverywhere && hasSquadWithOthers,
-      };
+      return await api.get<{ hasSquadWithOthers: boolean; isFirstPlace: boolean }>(
+        `/leaderboard-status?${qs({ date: today })}`
+      );
     } catch (error) {
       console.error('[LeaderboardStatus] Error:', error);
       return { hasSquadWithOthers: false, isFirstPlace: false };
@@ -189,7 +114,7 @@ export default function HomeScreen() {
         setLastUpdated(new Date());
         setUiState('ready');
 
-        await syncStepsToSupabase();
+        await syncSteps();
 
         const status = await calculateLeaderboardStatus();
         setupNotifications({
@@ -206,7 +131,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     },
-    [syncStepsToSupabase, calculateLeaderboardStatus, goal]
+    [syncSteps, calculateLeaderboardStatus, goal]
   );
 
   useFocusEffect(

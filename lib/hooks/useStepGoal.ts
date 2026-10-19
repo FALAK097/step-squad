@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { api } from '@/lib/utils/api';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -15,13 +15,7 @@ export function useStepGoal() {
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('step_goal')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "No rows found"
+      const data = await api.get<{ step_goal: number | null }>('/profile');
       if (data?.step_goal) {
         setGoalState(data.step_goal);
       }
@@ -41,12 +35,7 @@ export function useStepGoal() {
       if (!session?.user || newGoal <= 0) return;
       try {
         setGoalState(newGoal);
-        const { error } = await supabase
-          .from('profiles')
-          .update({ step_goal: newGoal })
-          .eq('id', session.user.id);
-
-        if (error) throw error;
+        await api.put('/profile', { step_goal: newGoal });
       } catch (error) {
         console.error('Error updating step goal:', error);
       }

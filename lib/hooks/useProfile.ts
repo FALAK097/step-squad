@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { api } from '@/lib/utils/api';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -16,14 +16,10 @@ export function useProfile() {
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name, avatar_url')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setProfile(data || { display_name: null, avatar_url: null });
+      const data = await api.get<{ display_name: string | null; avatar_url: string | null }>(
+        '/profile'
+      );
+      setProfile({ display_name: data.display_name, avatar_url: data.avatar_url });
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -38,13 +34,7 @@ export function useProfile() {
   const updateProfile = async (updates: { display_name?: string; avatar_url?: string }) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) throw error;
+      await api.put('/profile', updates);
       setProfile((prev) =>
         prev ? { ...prev, ...updates } : { display_name: null, avatar_url: null, ...updates }
       );
