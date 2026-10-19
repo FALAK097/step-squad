@@ -20,6 +20,17 @@ const list = (value: string | undefined, fallback: string[]) =>
         .filter(Boolean)
     : fallback;
 
+// In development, load `.env` from the working directory so `pnpm dev` / `pnpm migrate`
+// pick up all configuration without exporting it in the shell. On Vercel NODE_ENV is
+// "production" and env vars come from the platform, so this is skipped there.
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    process.loadEnvFile();
+  } catch {
+    // No .env file present – rely on exported variables.
+  }
+}
+
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key];
   if (!value) throw new Error(`Missing required environment variable ${key}`);

@@ -20,7 +20,9 @@ Authorization that used to live in Supabase RLS policies is enforced in the rout
    export DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require'
    pnpm migrate
    ```
-5. Run locally: `pnpm dev` (listens on `:8787`, loads env from your shell – e.g. `node --env-file=.env` or `export`).
+5. Run locally: `pnpm dev`. It loads the required configuration from `server/.env` automatically
+   (listens on `:8787`). For the mobile dev build, point `EXPO_PUBLIC_API_URL` at this machine's
+   LAN IP (`ipconfig getifaddr en0`) instead of `localhost` so physical devices can reach it.
 
 ## Migrating existing Supabase data
 
@@ -40,8 +42,9 @@ What it does ([`scripts/import-from-supabase.ts`](scripts/import-from-supabase.t
 
 - Copies `auth.users` → `users` (keeping the **same user ids**, plus name/avatar from the Google metadata and
   the Google `sub` from `auth.identities`), then `profiles`, `squads`, `squad_members` and `daily_steps`.
-- Runs in a single transaction (all or nothing) and is idempotent (`ON CONFLICT DO NOTHING`), so it can be
-  re-run, e.g. a final time right before cut-over to pick up new step data.
+- Runs in a single transaction and reads Supabase through one REPEATABLE READ snapshot, so it is safe to
+  re-run (e.g. a final time right before cut-over); a rerun refreshes daily step counts. Stop writes to
+  Supabase during the final cut-over run.
 - Users do **not** need to do anything special: on their first Google sign-in against the new API they are
   matched by Google `sub` (or verified email) to their imported account, so squads, history and goals carry over.
   They will be signed out once, because Supabase sessions are not valid against the new API.
@@ -54,15 +57,11 @@ Import the repo in Vercel with **Root Directory = `server`** (the Hono framework
 [`vercel.json`](vercel.json)), and set the environment variables from `.env.example`
 (`PUBLIC_URL` = the deployment URL). Then set `EXPO_PUBLIC_API_URL` in the app's `.env` / EAS environment to that URL.
 
-## Tests
+## Verification
 
-```bash
-createdb stepsquad_test      # any local Postgres; override with TEST_DATABASE_URL
-pnpm test
-```
-
-Tests run the real SQL against a local Postgres (including the Supabase import against a simulated Supabase
-schema). They don't call Google or Neon.
+`pnpm typecheck` typechecks the code. There is no automated test suite in the repo; verify the
+migration and deploy by comparing row counts printed by the import script and signing in with a
+migrated account.
 
 ## API
 

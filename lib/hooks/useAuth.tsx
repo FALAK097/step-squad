@@ -1,5 +1,5 @@
 import { api, API_URL, qs, setAuthToken, setUnauthorizedHandler } from '@/lib/utils/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sessionStore } from '@/lib/utils/session-store';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as React from 'react';
@@ -56,8 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionState((prev) =>
       prev && next && JSON.stringify(prev) === JSON.stringify(next) ? prev : next
     );
-    if (next) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else await AsyncStorage.removeItem(STORAGE_KEY);
+    if (next) await sessionStore.set(STORAGE_KEY, JSON.stringify(next));
+    else await sessionStore.remove(STORAGE_KEY);
   }, []);
 
   React.useEffect(() => {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const raw = await sessionStore.get(STORAGE_KEY);
         if (!raw) return;
         const stored = JSON.parse(raw) as Session;
 
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSessionState((current) => {
               if (current?.access_token === stored.access_token) {
                 const refreshed = toSession(stored.access_token, me);
-                AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed)).catch(console.error);
+                sessionStore.set(STORAGE_KEY, JSON.stringify(refreshed)).catch(console.error);
                 return refreshed;
               }
               return current;

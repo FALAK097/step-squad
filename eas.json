@@ -8,6 +8,10 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
+        // A physical device cannot reach "localhost" (it points at the device itself).
+        // Replace this with this machine's LAN IP (e.g. `ipconfig getifaddr en0` on macOS)
+        // or a hosted dev URL before building for a device; localhost only works on
+        // simulators/emulators (or with adb reverse / iOS Simulator port forwarding).
         "EXPO_PUBLIC_API_URL": "http://localhost:8787"
       }
     },

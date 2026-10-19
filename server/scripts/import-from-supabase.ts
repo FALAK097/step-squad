@@ -8,7 +8,12 @@
  * - Run `pnpm migrate` against Neon first.
  * - Users keep their Supabase ids; their Google `sub` is taken from auth.identities, so existing
  *   users are recognised on their first sign-in against the new API.
- * - Idempotent: existing rows in Neon are left untouched (ON CONFLICT DO NOTHING).
+ * - Idempotent: can be re-run, e.g. a final time right before cut-over. Existing rows are left
+ *   untouched (ON CONFLICT DO NOTHING) except daily step counts, which a rerun refreshes with the
+ *   latest Supabase values.
+ * - All source reads happen in one REPEATABLE READ snapshot, so concurrently-created rows (e.g. a
+ *   squad created after the users query) are visible consistently or not at all. For the final
+ *   cut-over run, stop writes to Supabase so nothing is introduced between snapshot and restore.
  */
 import pg from 'pg';
 
@@ -41,7 +46,12 @@ async function main() {
   await source.connect();
   await target.connect();
   try {
-    await target.query('BEGIN');
+    await Promise.all([
+      // One consistent snapshot of all Supabase tables: rows created mid-import are either
+      // fully visible or not at all, so foreign keys on the target never see half a dataset.
+      source.query('BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY'),
+      target.query('BEGIN'),
+    ]);
 
     await copy(
       'users',
@@ -97,13 +107,22 @@ async function main() {
       (rs) => `INSERT INTO daily_steps (user_id, date, steps)
                SELECT user_id, date, GREATEST(steps, 0)
                  FROM ${rs} AS t(user_id uuid, date date, steps int)
-               ON CONFLICT DO NOTHING`
+               ON CONFLICT (user_id, date) DO UPDATE SET steps = EXCLUDED.steps`
     );
 
-    await target.query('COMMIT');
+    await Promise.all([source.query('COMMIT'), target.query('COMMIT')]);
     console.log('Import complete');
   } catch (err) {
-    await target.query('ROLLBACK');
+    // COMMIT below only runs once one side has succeeded; ROLLBACK here covers both the
+    // transaction case and a failure before any transaction was opened.
+    const rollback = async (client: { query: (sql: string) => Promise<unknown> }) => {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Connection already gone / no open transaction.
+      }
+    };
+    await Promise.all([rollback(source), rollback(target)]);
     throw err;
   } finally {
     await source.end();
