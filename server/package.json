@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx watch src/dev.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
     "import:supabase": "tsx scripts/import-from-supabase.ts"
   },
@@ -22,7 +21,6 @@
     "@types/pg": "^8.11.0",
     "pg": "^8.23.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "typescript": "^5.9.3"
   }
 }

@@ -71,21 +71,23 @@ async function main() {
     await copy(
       'squads',
       `SELECT id::text AS id, name, COALESCE(description, '') AS description, invite_code,
-              created_by::text AS created_by
+              created_by::text AS created_by,
+              COALESCE(created_at, now()) AS created_at
          FROM public.squads`,
-      (rs) => `INSERT INTO squads (id, name, description, invite_code, created_by)
-               SELECT id, name, description, invite_code, created_by
-                 FROM ${rs} AS t(id uuid, name text, description text, invite_code text, created_by uuid)
+      (rs) => `INSERT INTO squads (id, name, description, invite_code, created_by, created_at)
+               SELECT id, name, description, invite_code, created_by, created_at
+                 FROM ${rs} AS t(id uuid, name text, description text, invite_code text, created_by uuid, created_at timestamptz)
                ON CONFLICT DO NOTHING`
     );
 
     await copy(
       'squad_members',
-      `SELECT squad_id::text AS squad_id, user_id::text AS user_id, COALESCE(role, 'member') AS role
+      `SELECT squad_id::text AS squad_id, user_id::text AS user_id, COALESCE(role, 'member') AS role,
+              COALESCE(joined_at, now()) AS joined_at
          FROM public.squad_members`,
-      (rs) => `INSERT INTO squad_members (squad_id, user_id, role)
-               SELECT squad_id, user_id, role
-                 FROM ${rs} AS t(squad_id uuid, user_id uuid, role text)
+      (rs) => `INSERT INTO squad_members (squad_id, user_id, role, joined_at)
+               SELECT squad_id, user_id, role, joined_at
+                 FROM ${rs} AS t(squad_id uuid, user_id uuid, role text, joined_at timestamptz)
                ON CONFLICT DO NOTHING`
     );
 

@@ -49,7 +49,7 @@ export default function HomeScreen() {
     try {
       const historyData = await readDailyStepsHistory(14);
       await api.put('/steps', {
-        days: historyData.map((item) => ({ date: item.date, steps: item.steps })),
+        days: historyData.map((item) => ({ date: item.date, steps: Math.max(0, Math.round(item.steps)) })),
       });
       refreshHistory();
     } catch (error) {

@@ -11,25 +11,33 @@ const NONCE_COOKIE = 'oauth_nonce';
 type UserRow = { id: string };
 
 async function upsertGoogleUser(query: Query, g: GoogleProfile): Promise<UserRow> {
-  // 1. Returning Google user.
+  const email = g.email.trim().toLowerCase();
+
+  // 1. Returning Google user by sub.
   let [user] = await query<UserRow>(
     `UPDATE users SET email = $2, full_name = $3, avatar_url = $4 WHERE google_sub = $1 RETURNING id`,
-    [g.sub, g.email, g.name, g.picture]
+    [g.sub, email, g.name, g.picture]
   );
 
-  // 2. Otherwise link by verified email (this is how users imported from Supabase keep their ids),
-  //    or create a new user.
+  // 2. Otherwise link by verified email (only if user has no google_sub yet),
+  //    or insert a new user if no account exists with that email.
   if (!user) {
     [user] = await query<UserRow>(
       `INSERT INTO users (google_sub, email, full_name, avatar_url)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (email) DO UPDATE
          SET google_sub = EXCLUDED.google_sub,
-             full_name = EXCLUDED.full_name,
-             avatar_url = EXCLUDED.avatar_url
+             full_name = COALESCE(EXCLUDED.full_name, users.full_name),
+             avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
+       WHERE users.google_sub IS NULL OR users.google_sub = EXCLUDED.google_sub
        RETURNING id`,
-      [g.sub, g.email, g.name, g.picture]
+      [g.sub, email, g.name, g.picture]
     );
+
+    if (!user) {
+      // The email already belonged to an account with a different google_sub
+      throw new Error('Account email conflict');
+    }
   }
 
   await query(

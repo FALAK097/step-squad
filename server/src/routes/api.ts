@@ -10,7 +10,13 @@ const DEFAULT_STEP_GOAL = 10000;
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const uuid = z.guid(); // lenient 8-4-4-4-12 hex, same as what Postgres accepts for uuid
-const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+const dateStr = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+  .refine((val) => {
+    const d = new Date(val + 'T00:00:00Z');
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === val;
+  }, { message: 'Invalid calendar date' });
 
 const profileBody = z
   .object({
@@ -103,7 +109,7 @@ export function apiRoutes(deps: { config: Config; query: Query }) {
       `SELECT ${SQUAD_COLUMNS}
          FROM squads s JOIN squad_members m ON m.squad_id = s.id
         WHERE m.user_id = $1
-        ORDER BY m.joined_at`,
+        ORDER BY m.joined_at DESC, s.name ASC`,
       [c.get('userId')]
     );
     return c.json(rows);

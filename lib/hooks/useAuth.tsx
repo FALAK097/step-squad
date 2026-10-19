@@ -76,7 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSessionState(stored);
         api
           .get<MeResponse>('/me')
-          .then((me) => applySession(toSession(stored.access_token, me)))
+          .then((me) => {
+            // Only apply if the user hasn't signed out or changed session in the meantime
+            setSessionState((current) => {
+              if (current?.access_token === stored.access_token) {
+                const refreshed = toSession(stored.access_token, me);
+                AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed)).catch(console.error);
+                return refreshed;
+              }
+              return current;
+            });
+          })
           .catch(() => {
             // 401s are handled by the unauthorized handler; other errors keep the cached session.
           });
@@ -95,6 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applySession]);
 
   const signInWithGoogle = React.useCallback(async () => {
+    if (!API_URL) {
+      console.error('EXPO_PUBLIC_API_URL is not configured');
+      return;
+    }
     const redirectTo = Linking.createURL('/');
 
     try {

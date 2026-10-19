@@ -36,8 +36,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicUrl: required(env, 'PUBLIC_URL').replace(/\/+$/, ''),
     googleClientId: required(env, 'GOOGLE_CLIENT_ID'),
     googleClientSecret: required(env, 'GOOGLE_CLIENT_SECRET'),
-    // step-squad:// = standalone/dev-client builds, exp:// = Expo Go.
-    allowedRedirectPrefixes: list(env.APP_REDIRECT_PREFIXES, ['step-squad://', 'exp://']),
+    // step-squad:// = standalone/dev-client builds. exp:// = Expo Go (only allowed if explicitly enabled or non-production)
+    allowedRedirectPrefixes: list(
+      env.APP_REDIRECT_PREFIXES,
+      process.env.NODE_ENV === 'production' ? ['step-squad://'] : ['step-squad://', 'exp://']
+    ),
     corsOrigins: list(env.CORS_ORIGINS, []),
     sessionTtlSeconds: Number(env.SESSION_TTL_SECONDS) || 60 * 60 * 24 * 30,
   };
