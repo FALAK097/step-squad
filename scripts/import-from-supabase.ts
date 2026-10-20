@@ -18,8 +18,13 @@ const databaseUrl: string = envDatabaseUrl;
 async function run() {
   const srcIsLocal = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
   const dstIsLocal = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
-  const src = new pg.Client({ connectionString: supabaseUrl, ssl: srcIsLocal ? false : { rejectUnauthorized: false } });
-  const dst = new pg.Client({ connectionString: databaseUrl, ssl: dstIsLocal ? false : { rejectUnauthorized: false } });
+  const srcCa = process.env.SUPABASE_DB_CA;
+  const dstCa = process.env.DATABASE_CA;
+  const srcSsl = srcIsLocal ? false : srcCa ? { ca: srcCa, rejectUnauthorized: true } : { rejectUnauthorized: false };
+  const dstSsl = dstIsLocal ? false : dstCa ? { ca: dstCa, rejectUnauthorized: true } : { rejectUnauthorized: false };
+
+  const src = new pg.Client({ connectionString: supabaseUrl, ssl: srcSsl });
+  const dst = new pg.Client({ connectionString: databaseUrl, ssl: dstSsl });
 
   await src.connect();
   await dst.connect();
@@ -50,30 +55,37 @@ async function run() {
 
     // 2. Squads
     const { rows: squads } = await src.query(`
-      SELECT id, name, coalesce(description, '') as description, invite_code, created_by::text
+      SELECT id, name, coalesce(description, '') as description, invite_code, created_by::text, created_at
       FROM public.squads
     `);
     console.log(`squads: ${squads.length} read from Supabase`);
     for (const s of squads) {
       await dst.query(`
-        INSERT INTO public.squads (id, name, description, invite_code, created_by)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id) DO NOTHING
-      `, [s.id, s.name, s.description, s.invite_code, s.created_by]);
+        INSERT INTO public.squads (id, name, description, invite_code, created_by, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          invite_code = EXCLUDED.invite_code,
+          created_by = EXCLUDED.created_by,
+          created_at = EXCLUDED.created_at
+      `, [s.id, s.name, s.description, s.invite_code, s.created_by, s.created_at]);
     }
 
     // 3. Squad members
     const { rows: members } = await src.query(`
-      SELECT squad_id, user_id::text, coalesce(role, 'member') as role
+      SELECT squad_id, user_id::text, coalesce(role, 'member') as role, joined_at
       FROM public.squad_members
     `);
     console.log(`squad_members: ${members.length} read from Supabase`);
     for (const m of members) {
       await dst.query(`
-        INSERT INTO public.squad_members (squad_id, user_id, role)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (squad_id, user_id) DO NOTHING
-      `, [m.squad_id, m.user_id, m.role]);
+        INSERT INTO public.squad_members (squad_id, user_id, role, joined_at)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (squad_id, user_id) DO UPDATE SET
+          role = EXCLUDED.role,
+          joined_at = EXCLUDED.joined_at
+      `, [m.squad_id, m.user_id, m.role, m.joined_at]);
     }
 
     // 4. Daily steps
