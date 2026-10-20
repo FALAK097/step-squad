@@ -1,4 +1,4 @@
-import { api } from '@/lib/utils/api';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -16,10 +16,14 @@ export function useProfile() {
       return;
     }
     try {
-      const data = await api.get<{ display_name: string | null; avatar_url: string | null }>(
-        '/profile'
-      );
-      setProfile({ display_name: data.display_name, avatar_url: data.avatar_url });
+      const { data, error } = await neon
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error && (error as any).code !== 'PGRST116') throw error;
+      setProfile((data as any) || { display_name: null, avatar_url: null });
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -34,7 +38,13 @@ export function useProfile() {
   const updateProfile = async (updates: { display_name?: string; avatar_url?: string }) => {
     if (!session?.user) return;
     try {
-      await api.put('/profile', updates);
+      const { error } = await neon.from('profiles').upsert({
+        id: session.user.id,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
       setProfile((prev) =>
         prev ? { ...prev, ...updates } : { display_name: null, avatar_url: null, ...updates }
       );

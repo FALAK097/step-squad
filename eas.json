@@ -8,11 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        // A physical device cannot reach "localhost" (it points at the device itself).
-        // Replace this with this machine's LAN IP (e.g. `ipconfig getifaddr en0` on macOS)
-        // or a hosted dev URL before building for a device; localhost only works on
-        // simulators/emulators (or with adb reverse / iOS Simulator port forwarding).
-        "EXPO_PUBLIC_API_URL": "http://localhost:8787"
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
       }
     },
     "preview": {
@@ -21,7 +18,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://step-squad-api.vercel.app"
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
       }
     },
     "production": {
@@ -30,7 +28,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://step-squad-api.vercel.app"
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
       }
     }
   },

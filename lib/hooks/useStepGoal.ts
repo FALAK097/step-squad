@@ -1,4 +1,4 @@
-import { api } from '@/lib/utils/api';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -15,9 +15,15 @@ export function useStepGoal() {
       return;
     }
     try {
-      const data = await api.get<{ step_goal: number | null }>('/profile');
-      if (data?.step_goal) {
-        setGoalState(data.step_goal);
+      const { data, error } = await neon
+        .from('profiles')
+        .select('step_goal')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error && (error as any).code !== 'PGRST116') throw error;
+      if ((data as any)?.step_goal) {
+        setGoalState((data as any).step_goal);
       }
     } catch (error) {
       console.error('Error fetching step goal:', error);
@@ -35,7 +41,12 @@ export function useStepGoal() {
       if (!session?.user || newGoal <= 0) return;
       try {
         setGoalState(newGoal);
-        await api.put('/profile', { step_goal: newGoal });
+        const { error } = await neon
+          .from('profiles')
+          .update({ step_goal: newGoal })
+          .eq('id', session.user.id);
+
+        if (error) throw error;
       } catch (error) {
         console.error('Error updating step goal:', error);
       }

@@ -19,7 +19,7 @@ import { useStepHistory } from '@/lib/hooks/useStepHistory';
 import { useProfile } from '@/lib/hooks/useProfile';
 import { useSquads, useSquadDetails } from '@/lib/hooks/useSquads';
 import { formatDate } from '@/lib/utils/date';
-import { api, qs } from '@/lib/utils/api';
+import { neon } from '@/lib/utils/neon';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useFocusEffect, router } from 'expo-router';
 import { Trophy, Users } from 'lucide-react-native';
@@ -48,9 +48,17 @@ export default function HomeScreen() {
     if (!session?.user) return;
     try {
       const historyData = await readDailyStepsHistory(14);
-      await api.put('/steps', {
-        days: historyData.map((item) => ({ date: item.date, steps: Math.max(0, Math.round(item.steps)) })),
-      });
+      const data = historyData.map((item) => ({
+        user_id: session.user.id,
+        date: item.date,
+        steps: Math.max(0, Math.round(item.steps)),
+      }));
+
+      const { error } = await neon
+        .from('daily_steps')
+        .upsert(data as any, { onConflict: 'user_id,date' });
+
+      if (error) throw error;
       refreshHistory();
     } catch (error) {
       console.error('[Sync] Error syncing steps:', error);
@@ -63,10 +71,74 @@ export default function HomeScreen() {
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      return await api.get<{ hasSquadWithOthers: boolean; isFirstPlace: boolean }>(
-        `/leaderboard-status?${qs({ date: today })}`
+      const { data: squadsData, error: squadsError } = await neon
+        .from('squad_members')
+        .select('squad_id')
+        .eq('user_id', session.user.id);
+
+      if (squadsError) throw squadsError;
+      const sList = (squadsData as any[]) || [];
+      if (sList.length === 0) return { hasSquadWithOthers: false, isFirstPlace: false };
+
+      const squadIds = sList.map((s) => s.squad_id);
+
+      const { data: membersData, error: membersError } = await neon
+        .from('squad_members')
+        .select('squad_id, user_id')
+        .in('squad_id', squadIds);
+
+      if (membersError) throw membersError;
+      const mList = (membersData as any[]) || [];
+
+      const squadMemberCounts = squadIds.reduce(
+        (acc, id) => {
+          acc[id] = mList.filter((m) => m.squad_id === id).length;
+          return acc;
+        },
+        {} as Record<string, number>
       );
+
+      const hasSquadWithOthers = Object.values(squadMemberCounts).some(
+        (count) => (count as number) > 1
+      );
+      if (!hasSquadWithOthers) return { hasSquadWithOthers: false, isFirstPlace: false };
+
+      const today = new Date().toISOString().split('T')[0];
+      const memberUserIds = mList.map((m) => m.user_id);
+      const { data: stepsData, error: stepsError } = await neon
+        .from('daily_steps')
+        .select('user_id, steps')
+        .eq('date', today)
+        .in('user_id', memberUserIds);
+
+      if (stepsError) throw stepsError;
+      const stList = (stepsData as any[]) || [];
+
+      let userIsFirstEverywhere = true;
+      for (const squadId of squadIds) {
+        if (squadMemberCounts[squadId] <= 1) continue;
+
+        const squadUserIds = mList
+          .filter((m) => m.squad_id === squadId)
+          .map((m) => m.user_id);
+
+        const squadSteps = squadUserIds
+          .map((uid) => ({
+            user_id: uid,
+            steps: stList.filter((s) => s.user_id === uid).reduce((sum, s) => sum + s.steps, 0),
+          }))
+          .sort((a, b) => b.steps - a.steps);
+
+        const myRank = squadSteps.findIndex((s) => s.user_id === session.user.id) + 1;
+        if (myRank > 1) {
+          userIsFirstEverywhere = false;
+        }
+      }
+
+      return {
+        hasSquadWithOthers,
+        isFirstPlace: userIsFirstEverywhere && hasSquadWithOthers,
+      };
     } catch (error) {
       console.error('[LeaderboardStatus] Error:', error);
       return { hasSquadWithOthers: false, isFirstPlace: false };

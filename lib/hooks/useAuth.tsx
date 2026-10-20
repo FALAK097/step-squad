@@ -1,4 +1,4 @@
-import { api, API_URL, qs, setAuthToken, setUnauthorizedHandler } from '@/lib/utils/api';
+import { neon } from '@/lib/utils/neon';
 import { sessionStore } from '@/lib/utils/session-store';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -10,6 +10,7 @@ const STORAGE_KEY = 'step-squad.session';
 
 export type Session = {
   access_token: string;
+  refresh_token?: string;
   user: {
     id: string;
     email: string | null;
@@ -21,13 +22,6 @@ export type Session = {
   };
 };
 
-type MeResponse = {
-  id: string;
-  email: string | null;
-  full_name: string | null;
-  avatar_url: string | null;
-};
-
 type AuthContextType = {
   session: Session | null;
   loading: boolean;
@@ -37,101 +31,144 @@ type AuthContextType = {
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
-const toSession = (access_token: string, me: MeResponse): Session => ({
-  access_token,
-  user: {
-    id: me.id,
-    email: me.email,
-    user_metadata: { full_name: me.full_name, avatar_url: me.avatar_url, picture: me.avatar_url },
-  },
-});
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSessionState] = React.useState<Session | null>(null);
+  const [session, setSession] = React.useState<Session | null>(null);
   const [loading, setLoading] = React.useState(true);
 
-  // Keeps the API client's token and persisted copy in sync with state.
-  const applySession = React.useCallback(async (next: Session | null) => {
-    setAuthToken(next?.access_token ?? null);
-    setSessionState((prev) =>
-      prev && next && JSON.stringify(prev) === JSON.stringify(next) ? prev : next
-    );
-    if (next) await sessionStore.set(STORAGE_KEY, JSON.stringify(next));
-    else await sessionStore.remove(STORAGE_KEY);
-  }, []);
-
   React.useEffect(() => {
-    setUnauthorizedHandler(() => {
-      applySession(null);
-    });
-
+    // 1. Restore persisted session from SecureStore on startup
     (async () => {
       try {
         const raw = await sessionStore.get(STORAGE_KEY);
-        if (!raw) return;
-        const stored = JSON.parse(raw) as Session;
-
-        // Use the stored session right away (works offline), then refresh the user in the background.
-        setAuthToken(stored.access_token);
-        setSessionState(stored);
-        api
-          .get<MeResponse>('/me')
-          .then((me) => {
-            // Only apply if the user hasn't signed out or changed session in the meantime
-            setSessionState((current) => {
-              if (current?.access_token === stored.access_token) {
-                const refreshed = toSession(stored.access_token, me);
-                sessionStore.set(STORAGE_KEY, JSON.stringify(refreshed)).catch(console.error);
-                return refreshed;
-              }
-              return current;
+        if (raw) {
+          const stored = JSON.parse(raw) as Session;
+          if (stored?.access_token) {
+            await (neon.auth as any).setSession?.({
+              access_token: stored.access_token,
+              refresh_token: stored.refresh_token,
             });
-          })
-          .catch(() => {
-            // 401s are handled by the unauthorized handler; other errors keep the cached session.
-          });
-      } catch (e) {
-        console.error('Failed to restore session:', e);
+            setSession(stored);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore session:', err);
       } finally {
+        // Also check if neon.auth has an active session
+        try {
+          const { data } = await (neon.auth as any).getSession?.();
+          if (data?.session) {
+            const s: Session = {
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+              user: {
+                id: data.session.user?.id,
+                email: data.session.user?.email ?? null,
+                user_metadata: data.session.user?.user_metadata ?? {},
+              },
+            };
+            setSession(s);
+            await sessionStore.set(STORAGE_KEY, JSON.stringify(s));
+          }
+        } catch {
+          // ignore
+        }
         setLoading(false);
       }
     })();
 
-    return () => setUnauthorizedHandler(null);
-  }, [applySession]);
+    // 2. Listen for auth changes
+    let unsubscribe = () => {};
+    try {
+      const listener = (neon.auth as any).onAuthStateChange?.(async (_event: string, nextSession: any) => {
+        if (nextSession) {
+          const s: Session = {
+            access_token: nextSession.access_token,
+            refresh_token: nextSession.refresh_token,
+            user: {
+              id: nextSession.user?.id,
+              email: nextSession.user?.email ?? null,
+              user_metadata: nextSession.user?.user_metadata ?? {},
+            },
+          };
+          setSession(s);
+          await sessionStore.set(STORAGE_KEY, JSON.stringify(s));
+        } else {
+          setSession(null);
+          await sessionStore.remove(STORAGE_KEY);
+        }
+        setLoading(false);
+      });
+      if (listener?.data?.subscription?.unsubscribe) {
+        unsubscribe = () => listener.data.subscription.unsubscribe();
+      }
+    } catch {
+      // ignore
+    }
+
+    return () => unsubscribe();
+  }, []);
 
   const signOut = React.useCallback(async () => {
-    await applySession(null);
-  }, [applySession]);
+    try {
+      await (neon.auth as any).signOut?.();
+    } catch (e) {
+      console.error('Sign out error:', e);
+    }
+    setSession(null);
+    await sessionStore.remove(STORAGE_KEY);
+  }, []);
 
   const signInWithGoogle = React.useCallback(async () => {
-    if (!API_URL) {
-      console.error('EXPO_PUBLIC_API_URL is not configured');
-      return;
-    }
     const redirectTo = Linking.createURL('/');
 
     try {
-      const startUrl = `${API_URL}/auth/google/start?${qs({ redirect_uri: redirectTo })}`;
-      const res = await WebBrowser.openAuthSessionAsync(startUrl, redirectTo);
-      if (res.type !== 'success') return;
+      const { data, error } = await (neon.auth as any).signInWithOAuth?.({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
 
-      setLoading(true);
-      const params = new URLSearchParams(res.url.split('#')[1] ?? '');
-      const error = params.get('error');
-      if (error) throw new Error(`Sign in failed: ${error}`);
+      if (error) throw error;
 
-      const accessToken = params.get('access_token');
-      if (!accessToken) throw new Error('Sign in did not return an access token');
+      if (data?.url) {
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (res.type === 'success') {
+          setLoading(true);
+          const { url } = res;
 
-      const me = await api.get<MeResponse>('/me', accessToken);
-      await applySession(toSession(accessToken, me));
+          const params = url.split('#')[1] || url.split('?')[1];
+          if (params) {
+            const queryParams: Record<string, string> = {};
+            params.split('&').forEach((part) => {
+              const [key, value] = part.split('=');
+              queryParams[key] = decodeURIComponent(value || '');
+            });
+
+            const access_token = queryParams.access_token || queryParams.token;
+            const refresh_token = queryParams.refresh_token;
+
+            if (access_token) {
+              const { error: sessionError } = await (neon.auth as any).setSession?.({
+                access_token,
+                refresh_token,
+              });
+              if (sessionError) throw sessionError;
+              return;
+            }
+          }
+        }
+      }
     } catch (e) {
       console.error('Google Sign In Error:', e);
     } finally {
-      setLoading(false);
+      const { data } = await (neon.auth as any).getSession?.().catch(() => ({ data: null }));
+      if (!data?.session) {
+        setLoading(false);
+      }
     }
-  }, [applySession]);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ session, loading, signOut, signInWithGoogle }}>

@@ -1,4 +1,4 @@
-import { api, qs } from '@/lib/utils/api';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -27,7 +27,18 @@ export function useSquads() {
     if (!session?.user) return;
     setLoading(true);
     try {
-      setMySquads(await api.get<Squad[]>('/squads'));
+      const { data, error } = await neon
+        .from('squad_members')
+        .select(
+          `
+          squads (*)
+        `
+        )
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+      const squads = ((data as any[]) || []).map((item) => item.squads).filter(Boolean);
+      setMySquads(squads);
     } catch (error) {
       console.error('Error fetching squads:', error);
     } finally {
@@ -42,9 +53,30 @@ export function useSquads() {
   const createSquad = async (name: string, description: string) => {
     if (!session?.user) return null;
     try {
-      const squad = await api.post<Squad>('/squads', { name, description });
+      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const { data: squad, error: squadError } = await neon
+        .from('squads')
+        .insert({
+          name,
+          description,
+          created_by: session.user.id,
+          invite_code: inviteCode,
+        })
+        .select()
+        .single();
+
+      if (squadError) throw squadError;
+
+      const { error: memberError } = await neon.from('squad_members').insert({
+        squad_id: (squad as any).id,
+        user_id: session.user.id,
+        role: 'admin',
+      });
+
+      if (memberError) throw memberError;
+
       await fetchMySquads();
-      return squad;
+      return squad as Squad;
     } catch (error) {
       console.error('Error creating squad:', error);
       return null;
@@ -54,21 +86,41 @@ export function useSquads() {
   const joinSquadWithCode = async (inviteCode: string) => {
     if (!session?.user) return { error: 'Not logged in' };
     try {
-      const { squad_id, squad } = await api.post<{ squad_id: string; squad: Squad }>(
-        '/squads/join',
-        { invite_code: inviteCode }
-      );
+      const { data: squad, error: squadError } = await neon
+        .from('squads')
+        .select('*')
+        .eq('invite_code', inviteCode.trim().toUpperCase())
+        .single();
+
+      if (squadError || !squad) throw new Error('Invalid invite code');
+
+      const { error: memberError } = await neon.from('squad_members').insert({
+        squad_id: (squad as any).id,
+        user_id: session.user.id,
+      });
+
+      if (memberError) {
+        if ((memberError as any).code === '23505') throw new Error('You are already in this squad');
+        throw memberError;
+      }
+
       await fetchMySquads();
-      return { success: true, squad_id, squad };
+      return { success: true, squad_id: (squad as any).id, squad: squad as Squad };
     } catch (error: any) {
-      return { error: error.message as string };
+      return { error: error.message };
     }
   };
 
   const leaveSquad = async (squadId: string) => {
     if (!session?.user) return;
     try {
-      await api.post(`/squads/${squadId}/leave`);
+      const { error } = await neon
+        .from('squad_members')
+        .delete()
+        .eq('squad_id', squadId)
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
       await fetchMySquads();
     } catch (error) {
       console.error('Error leaving squad:', error);
@@ -78,7 +130,13 @@ export function useSquads() {
   const deleteSquad = async (squadId: string) => {
     if (!session?.user) return;
     try {
-      await api.delete(`/squads/${squadId}`);
+      const { error } = await neon
+        .from('squads')
+        .delete()
+        .eq('id', squadId)
+        .eq('created_by', session.user.id);
+
+      if (error) throw error;
       await fetchMySquads();
     } catch (error) {
       console.error('Error deleting squad:', error);
@@ -104,18 +162,65 @@ export function useSquadDetails(squadId: string, timeframe: 'daily' | 'weekly' =
     if (!squadId) return;
     setLoading(true);
     try {
-      // Calculate start date based on timeframe
+      const { data: membersData, error: membersError } = await neon
+        .from('squad_members')
+        .select('user_id, role')
+        .eq('squad_id', squadId);
+
+      if (membersError) throw membersError;
+
+      const mList = (membersData as any[]) || [];
+      const userIds = mList.map((m) => m.user_id);
+
+      if (userIds.length === 0) {
+        setMembers([]);
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await neon
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
       const startDate = new Date();
       if (timeframe === 'weekly') {
         startDate.setDate(startDate.getDate() - 7);
       }
-      const since =
+      const dateStr =
         timeframe === 'daily'
           ? new Date().toISOString().split('T')[0]
           : startDate.toISOString().split('T')[0];
 
-      // The API returns members already ranked by total steps since `since`.
-      setMembers(await api.get<SquadMember[]>(`/squads/${squadId}/members?${qs({ since })}`));
+      const { data: stepsData, error: stepsError } = await neon
+        .from('daily_steps')
+        .select('user_id, steps')
+        .gte('date', dateStr)
+        .in('user_id', userIds);
+
+      if (stepsError) throw stepsError;
+
+      const pList = (profilesData as any[]) || [];
+      const sList = (stepsData as any[]) || [];
+
+      const membersList: SquadMember[] = mList.map((m: any) => {
+        const profile = pList.find((p) => p.id === m.user_id);
+        const userSteps =
+          sList
+            .filter((s) => s.user_id === m.user_id)
+            .reduce((acc, curr) => acc + curr.steps, 0) || 0;
+
+        return {
+          user_id: m.user_id,
+          display_name: profile?.display_name || 'Anonymous',
+          avatar_url: profile?.avatar_url || null,
+          role: m.role,
+          total_steps: userSteps,
+        };
+      });
+
+      setMembers(membersList.sort((a, b) => (b.total_steps || 0) - (a.total_steps || 0)));
     } catch (error) {
       console.error('Error fetching squad details:', error);
     } finally {
