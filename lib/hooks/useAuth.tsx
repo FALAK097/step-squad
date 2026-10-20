@@ -42,11 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const raw = await sessionStore.get(STORAGE_KEY);
         if (raw) {
           const stored = JSON.parse(raw) as Session;
-          if (stored?.access_token) {
-            await (neon.auth as any).setSession?.({
-              access_token: stored.access_token,
-              refresh_token: stored.refresh_token,
-            });
+          if (stored?.user?.id) {
             setSession(stored);
           }
         }
@@ -146,15 +142,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               queryParams[key] = decodeURIComponent(value || '');
             });
 
-            const access_token = queryParams.access_token || queryParams.token;
-            const refresh_token = queryParams.refresh_token;
+            const code = queryParams.code;
+            if (code) {
+              await (neon.auth as any).exchangeCodeForSession?.(code);
+            }
 
-            if (access_token) {
-              const { error: sessionError } = await (neon.auth as any).setSession?.({
-                access_token,
-                refresh_token,
-              });
-              if (sessionError) throw sessionError;
+            const { data: sessionData, error: sessionError } = await (neon.auth as any).getSession?.({ forceFetch: true });
+            if (sessionError) throw sessionError;
+            if (sessionData?.session) {
+              const s: Session = {
+                access_token: sessionData.session.access_token,
+                refresh_token: sessionData.session.refresh_token,
+                user: {
+                  id: sessionData.session.user?.id,
+                  email: sessionData.session.user?.email ?? null,
+                  user_metadata: sessionData.session.user?.user_metadata ?? {},
+                },
+              };
+              setSession(s);
+              await sessionStore.set(STORAGE_KEY, JSON.stringify(s));
               return;
             }
           }
