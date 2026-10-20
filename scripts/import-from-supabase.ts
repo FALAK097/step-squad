@@ -35,9 +35,52 @@ async function run() {
     await src.query('BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     await dst.query('BEGIN');
 
+    // 0. Auth Users & OAuth Identities -> neon_auth.user & neon_auth.account
+    const { rows: authUsers } = await src.query(`
+      SELECT
+        id,
+        email,
+        coalesce(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', split_part(email, '@', 1)) AS name,
+        coalesce(raw_user_meta_data->>'avatar_url', raw_user_meta_data->>'picture') AS image,
+        (email_confirmed_at IS NOT NULL) AS email_verified,
+        created_at,
+        updated_at
+      FROM auth.users
+    `);
+    console.log(`auth.users: ${authUsers.length} read from Supabase`);
+    for (const u of authUsers) {
+      await dst.query(`
+        INSERT INTO neon_auth."user" (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($7, now()))
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          "emailVerified" = EXCLUDED."emailVerified",
+          image = EXCLUDED.image,
+          "updatedAt" = EXCLUDED."updatedAt"
+      `, [u.id, u.name, u.email, u.email_verified, u.image, u.created_at, u.updated_at]);
+    }
+
+    const { rows: authIdentities } = await src.query(`
+      SELECT id, provider_id, provider, user_id, created_at, updated_at
+      FROM auth.identities
+    `);
+    console.log(`auth.identities: ${authIdentities.length} read from Supabase`);
+    for (const ident of authIdentities) {
+      await dst.query(`
+        INSERT INTO neon_auth.account (id, "accountId", "providerId", "userId", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, coalesce($5, now()), coalesce($6, now()))
+        ON CONFLICT (id) DO UPDATE SET
+          "accountId" = EXCLUDED."accountId",
+          "providerId" = EXCLUDED."providerId",
+          "userId" = EXCLUDED."userId",
+          "updatedAt" = EXCLUDED."updatedAt"
+      `, [ident.id, ident.provider_id, ident.provider, ident.user_id, ident.created_at, ident.updated_at]);
+    }
+
     // 1. Profiles
     const { rows: profiles } = await src.query(`
-      SELECT id::text, display_name, avatar_url, step_goal, updated_at
+      SELECT id::text, coalesce(display_name, full_name) AS display_name, avatar_url, step_goal, coalesce(updated_at, now()) AS updated_at
       FROM public.profiles
     `);
     console.log(`profiles: ${profiles.length} read from Supabase`);
@@ -74,7 +117,7 @@ async function run() {
 
     // 3. Squad members
     const { rows: members } = await src.query(`
-      SELECT squad_id, user_id::text, coalesce(role, 'member') as role, joined_at
+      SELECT squad_id, user_id::text, coalesce(role, 'member') as role, created_at as joined_at
       FROM public.squad_members
     `);
     console.log(`squad_members: ${members.length} read from Supabase`);
