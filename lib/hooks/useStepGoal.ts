@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -15,15 +15,15 @@ export function useStepGoal() {
       return;
     }
     try {
-      const { data, error } = await supabase
+      const { data, error } = await neon
         .from('profiles')
         .select('step_goal')
         .eq('id', session.user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "No rows found"
-      if (data?.step_goal) {
-        setGoalState(data.step_goal);
+      if (error && (error as any).code !== 'PGRST116') throw error;
+      if ((data as any)?.step_goal) {
+        setGoalState((data as any).step_goal);
       }
     } catch (error) {
       console.error('Error fetching step goal:', error);
@@ -41,7 +41,7 @@ export function useStepGoal() {
       if (!session?.user || newGoal <= 0) return;
       try {
         setGoalState(newGoal);
-        const { error } = await supabase
+        const { error } = await neon
           .from('profiles')
           .update({ step_goal: newGoal })
           .eq('id', session.user.id);

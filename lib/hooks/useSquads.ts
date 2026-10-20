@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -27,7 +27,7 @@ export function useSquads() {
     if (!session?.user) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await neon
         .from('squad_members')
         .select(
           `
@@ -37,7 +37,8 @@ export function useSquads() {
         .eq('user_id', session.user.id);
 
       if (error) throw error;
-      setMySquads(data.map((item: any) => item.squads));
+      const squads = ((data as any[]) || []).map((item) => item.squads).filter(Boolean);
+      setMySquads(squads);
     } catch (error) {
       console.error('Error fetching squads:', error);
     } finally {
@@ -53,7 +54,7 @@ export function useSquads() {
     if (!session?.user) return null;
     try {
       const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const { data: squad, error: squadError } = await supabase
+      const { data: squad, error: squadError } = await neon
         .from('squads')
         .insert({
           name,
@@ -66,8 +67,8 @@ export function useSquads() {
 
       if (squadError) throw squadError;
 
-      const { error: memberError } = await supabase.from('squad_members').insert({
-        squad_id: squad.id,
+      const { error: memberError } = await neon.from('squad_members').insert({
+        squad_id: (squad as any).id,
         user_id: session.user.id,
         role: 'admin',
       });
@@ -75,7 +76,7 @@ export function useSquads() {
       if (memberError) throw memberError;
 
       await fetchMySquads();
-      return squad;
+      return squad as Squad;
     } catch (error) {
       console.error('Error creating squad:', error);
       return null;
@@ -85,26 +86,26 @@ export function useSquads() {
   const joinSquadWithCode = async (inviteCode: string) => {
     if (!session?.user) return { error: 'Not logged in' };
     try {
-      const { data: squad, error: squadError } = await supabase
+      const { data: squad, error: squadError } = await neon
         .from('squads')
-        .select('id')
-        .eq('invite_code', inviteCode)
+        .select('*')
+        .eq('invite_code', inviteCode.trim().toUpperCase())
         .single();
 
-      if (squadError) throw new Error('Invalid invite code');
+      if (squadError || !squad) throw new Error('Invalid invite code');
 
-      const { error: memberError } = await supabase.from('squad_members').insert({
-        squad_id: squad.id,
+      const { error: memberError } = await neon.from('squad_members').insert({
+        squad_id: (squad as any).id,
         user_id: session.user.id,
       });
 
       if (memberError) {
-        if (memberError.code === '23505') throw new Error('You are already in this squad');
+        if ((memberError as any).code === '23505') throw new Error('You are already in this squad');
         throw memberError;
       }
 
       await fetchMySquads();
-      return { success: true, squad_id: squad.id };
+      return { success: true, squad_id: (squad as any).id, squad: squad as Squad };
     } catch (error: any) {
       return { error: error.message };
     }
@@ -113,7 +114,7 @@ export function useSquads() {
   const leaveSquad = async (squadId: string) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { error } = await neon
         .from('squad_members')
         .delete()
         .eq('squad_id', squadId)
@@ -129,7 +130,7 @@ export function useSquads() {
   const deleteSquad = async (squadId: string) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { error } = await neon
         .from('squads')
         .delete()
         .eq('id', squadId)
@@ -161,29 +162,28 @@ export function useSquadDetails(squadId: string, timeframe: 'daily' | 'weekly' =
     if (!squadId) return;
     setLoading(true);
     try {
-      // Manual join because automatic relationship detection failed PGRST200
-      const { data: membersData, error: membersError } = await supabase
+      const { data: membersData, error: membersError } = await neon
         .from('squad_members')
-        .select(
-          `
-          user_id,
-          role
-        `
-        )
+        .select('user_id, role')
         .eq('squad_id', squadId);
 
       if (membersError) throw membersError;
 
-      const userIds = membersData.map((m) => m.user_id);
+      const mList = (membersData as any[]) || [];
+      const userIds = mList.map((m) => m.user_id);
 
-      const { data: profilesData, error: profilesError } = await supabase
+      if (userIds.length === 0) {
+        setMembers([]);
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await neon
         .from('profiles')
         .select('id, display_name, avatar_url')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
 
-      // Calculate start date based on timeframe
       const startDate = new Date();
       if (timeframe === 'weekly') {
         startDate.setDate(startDate.getDate() - 7);
@@ -193,7 +193,7 @@ export function useSquadDetails(squadId: string, timeframe: 'daily' | 'weekly' =
           ? new Date().toISOString().split('T')[0]
           : startDate.toISOString().split('T')[0];
 
-      const { data: stepsData, error: stepsError } = await supabase
+      const { data: stepsData, error: stepsError } = await neon
         .from('daily_steps')
         .select('user_id, steps')
         .gte('date', dateStr)
@@ -201,11 +201,14 @@ export function useSquadDetails(squadId: string, timeframe: 'daily' | 'weekly' =
 
       if (stepsError) throw stepsError;
 
-      const membersList: SquadMember[] = membersData.map((m: any) => {
-        const profile = profilesData?.find((p) => p.id === m.user_id);
+      const pList = (profilesData as any[]) || [];
+      const sList = (stepsData as any[]) || [];
+
+      const membersList: SquadMember[] = mList.map((m: any) => {
+        const profile = pList.find((p) => p.id === m.user_id);
         const userSteps =
-          stepsData
-            ?.filter((s) => s.user_id === m.user_id)
+          sList
+            .filter((s) => s.user_id === m.user_id)
             .reduce((acc, curr) => acc + curr.steps, 0) || 0;
 
         return {

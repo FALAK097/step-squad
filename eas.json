@@ -6,18 +6,30 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_NEON_AUTH_URL": "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        "EXPO_PUBLIC_NEON_DATA_API_URL": "https://ep-example.apirest.us-east-1.aws.neon.build/neondb/rest/v1"
       }
     }
   },

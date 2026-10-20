@@ -2,7 +2,6 @@ import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useSquads, useSquadDetails, Squad } from '@/lib/hooks/useSquads';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { supabase } from '@/lib/utils/supabase';
 import {
   ChevronRight,
   Plus,
@@ -66,8 +65,7 @@ export default function SquadsScreen() {
   const handleJoin = async (code: string) => {
     const res = await joinSquadWithCode(code);
     if (res.success) {
-      const { data } = await supabase.from('squads').select('*').eq('id', res.squad_id).single();
-      if (data) setSelectedSquad(data);
+      setSelectedSquad(res.squad);
       setIsJoinModalOpen(false);
     }
     return res;

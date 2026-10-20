@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/utils/supabase';
+import { neon } from '@/lib/utils/neon';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 
@@ -16,14 +16,14 @@ export function useProfile() {
       return;
     }
     try {
-      const { data, error } = await supabase
+      const { data, error } = await neon
         .from('profiles')
         .select('display_name, avatar_url')
         .eq('id', session.user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      setProfile(data || { display_name: null, avatar_url: null });
+      if (error && (error as any).code !== 'PGRST116') throw error;
+      setProfile((data as any) || { display_name: null, avatar_url: null });
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -38,7 +38,7 @@ export function useProfile() {
   const updateProfile = async (updates: { display_name?: string; avatar_url?: string }) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase.from('profiles').upsert({
+      const { error } = await neon.from('profiles').upsert({
         id: session.user.id,
         ...updates,
         updated_at: new Date().toISOString(),
