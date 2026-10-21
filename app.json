@@ -52,7 +52,7 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 34,
             "minSdkVersion": 26,
-            "enableProguardInReleaseBuilds": true
+            "enableProguardInReleaseBuilds": false
           }
         }
       ]
